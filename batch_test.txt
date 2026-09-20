@@ -1,0 +1,3 @@
+pwd
+ls
+echo Meow from batch

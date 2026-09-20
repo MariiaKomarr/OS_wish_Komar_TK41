@@ -4,9 +4,30 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-int main() {
+int main(int argc_main, char *argv_main[]) {
     char *line = NULL;
     size_t len = 0;
+
+    FILE *input = stdin;
+    int interactive = 1;
+
+    // Check command-line arguments
+    if (argc_main > 2) {
+        printf("An error has occurred\n");
+        exit(1);
+    }
+
+    // Batch mode
+    if (argc_main == 2) {
+        input = fopen(argv_main[1], "r");
+
+        if (input == NULL) {
+            printf("An error has occurred\n");
+            exit(1);
+        }
+
+        interactive = 0;
+    }
 
     // Initial search path
     char *paths[100];
@@ -15,9 +36,15 @@ int main() {
     paths[0] = strdup("/bin");
 
     while (1) {
-        printf("wish> ");
 
-        if (getline(&line, &len, stdin) == -1) {
+        // Print prompt only in interactive mode
+        if (interactive) {
+            printf("wish> ");
+            fflush(stdout);
+        }
+
+        // Read command
+        if (getline(&line, &len, input) == -1) {
             break;
         }
 
@@ -33,19 +60,25 @@ int main() {
         char *args[100];
         int argc = 0;
 
-        char *token = strtok(line, " ");
+        char *token = strtok(line, " \t");
 
         while (token != NULL && argc < 99) {
             args[argc] = token;
             argc++;
 
-            token = strtok(NULL, " ");
+            token = strtok(NULL, " \t");
         }
 
         args[argc] = NULL;
 
+        // If nothing was parsed
+        if (argc == 0) {
+            continue;
+        }
+
         // Built-in exit command
         if (strcmp(args[0], "exit") == 0) {
+
             if (argc != 1) {
                 printf("An error has occurred\n");
                 continue;
@@ -53,6 +86,10 @@ int main() {
 
             for (int i = 0; i < path_count; i++) {
                 free(paths[i]);
+            }
+
+            if (!interactive) {
+                fclose(input);
             }
 
             free(line);
@@ -80,6 +117,7 @@ int main() {
 
         // Built-in cd command
         if (strcmp(args[0], "cd") == 0) {
+
             if (argc != 2) {
                 printf("An error has occurred\n");
                 continue;
@@ -97,6 +135,7 @@ int main() {
         int command_found = 0;
 
         for (int i = 0; i < path_count; i++) {
+
             snprintf(
                 full_path,
                 sizeof(full_path),
@@ -111,6 +150,7 @@ int main() {
             }
         }
 
+        // Command not found
         if (!command_found) {
             printf("An error has occurred\n");
             continue;
@@ -120,24 +160,34 @@ int main() {
         pid_t pid = fork();
 
         if (pid == 0) {
+
+            // Child process
             execv(full_path, args);
 
+            // execv returns only if something went wrong
             printf("An error has occurred\n");
             exit(1);
 
         } else if (pid > 0) {
 
+            // Parent waits for child
             wait(NULL);
 
         } else {
 
+            // fork failed
             printf("An error has occurred\n");
         }
     }
 
-    // Free memory before program ends
+    // Free allocated paths
     for (int i = 0; i < path_count; i++) {
         free(paths[i]);
+    }
+
+    // Close batch file
+    if (!interactive) {
+        fclose(input);
     }
 
     free(line);
