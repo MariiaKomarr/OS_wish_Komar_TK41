@@ -51,7 +51,10 @@ int main() {
                 continue;
             }
 
-            free(paths[0]);
+            for (int i = 0; i < path_count; i++) {
+                free(paths[i]);
+            }
+
             free(line);
             exit(0);
         }
@@ -75,12 +78,25 @@ int main() {
             continue;
         }
 
+        // Built-in cd command
+        if (strcmp(args[0], "cd") == 0) {
+            if (argc != 2) {
+                printf("An error has occurred\n");
+                continue;
+            }
+
+            if (chdir(args[1]) != 0) {
+                printf("An error has occurred\n");
+            }
+
+            continue;
+        }
+
         // Search executable in paths
         char full_path[256];
         int command_found = 0;
 
         for (int i = 0; i < path_count; i++) {
-
             snprintf(
                 full_path,
                 sizeof(full_path),
@@ -119,6 +135,7 @@ int main() {
         }
     }
 
+    // Free memory before program ends
     for (int i = 0; i < path_count; i++) {
         free(paths[i]);
     }
