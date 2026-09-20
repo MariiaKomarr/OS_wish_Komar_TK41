@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 int main() {
     char *line = NULL;
@@ -12,7 +13,16 @@ int main() {
             break;
         }
 
-        printf("You entered: %s", line);
+        // Remove newline character
+        line[strcspn(line, "\n")] = '\0';
+
+        // Built-in exit command
+        if (strcmp(line, "exit") == 0) {
+            free(line);
+            exit(0);
+        }
+
+        printf("You entered: %s\n", line);
     }
 
     free(line);
