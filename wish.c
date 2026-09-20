@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 int main() {
     char *line = NULL;
@@ -42,9 +44,30 @@ int main() {
 
         args[argc] = NULL;
 
-        // debug output
-        for (int i = 0; i < argc; i++) {
-            printf("args[%d] = %s\n", i, args[i]);
+        // Create child process
+        pid_t pid = fork();
+
+        if (pid == 0) {
+
+            char path[256];
+
+            snprintf(path, sizeof(path), "/bin/%s", args[0]);
+
+            execv(path, args);
+
+            // execv returns only if an error occurs
+            printf("An error has occurred\n");
+            exit(1);
+
+        } else if (pid > 0) {
+            // Parent process
+
+            wait(NULL);
+
+        } else {
+            // fork failed
+
+            printf("An error has occurred\n");
         }
     }
 
