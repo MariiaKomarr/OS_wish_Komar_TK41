@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 int main(int argc_main, char *argv_main[]) {
     char *line = NULL;
@@ -11,13 +12,11 @@ int main(int argc_main, char *argv_main[]) {
     FILE *input = stdin;
     int interactive = 1;
 
-    // Check command-line arguments
     if (argc_main > 2) {
         printf("An error has occurred\n");
         exit(1);
     }
 
-    // Batch mode
     if (argc_main == 2) {
         input = fopen(argv_main[1], "r");
 
@@ -29,7 +28,6 @@ int main(int argc_main, char *argv_main[]) {
         interactive = 0;
     }
 
-    // Initial search path
     char *paths[100];
     int path_count = 1;
 
@@ -37,26 +35,69 @@ int main(int argc_main, char *argv_main[]) {
 
     while (1) {
 
-        // Print prompt only in interactive mode
         if (interactive) {
             printf("wish> ");
             fflush(stdout);
         }
 
-        // Read command
         if (getline(&line, &len, input) == -1) {
             break;
         }
 
-        // Remove newline character
         line[strcspn(line, "\n")] = '\0';
 
-        // Skip empty input
         if (strlen(line) == 0) {
             continue;
         }
 
-        // Parse command into arguments
+        // Redirection parsing
+
+        char *redirect_file = NULL;
+
+        char *redirect_symbol = strchr(line, '>');
+
+        if (redirect_symbol != NULL) {
+
+            // Check if there is more than one >
+            if (strchr(redirect_symbol + 1, '>') != NULL) {
+                printf("An error has occurred\n");
+                continue;
+            }
+
+            // Split command and file name
+            *redirect_symbol = '\0';
+
+            char *file_part = redirect_symbol + 1;
+
+            // Remove spaces before file name
+            while (*file_part == ' ' || *file_part == '\t') {
+                file_part++;
+            }
+
+            if (strlen(file_part) == 0) {
+                printf("An error has occurred\n");
+                continue;
+            }
+
+            // Parse file part
+            char *file_token = strtok(file_part, " \t");
+
+            if (file_token == NULL) {
+                printf("An error has occurred\n");
+                continue;
+            }
+
+            redirect_file = file_token;
+
+            // There must be only one file after >
+            if (strtok(NULL, " \t") != NULL) {
+                printf("An error has occurred\n");
+                continue;
+            }
+        }
+
+        // Parse command
+
         char *args[100];
         int argc = 0;
 
@@ -71,12 +112,13 @@ int main(int argc_main, char *argv_main[]) {
 
         args[argc] = NULL;
 
-        // If nothing was parsed
         if (argc == 0) {
+            printf("An error has occurred\n");
             continue;
         }
 
-        // Built-in exit command
+        // Built-in exit
+
         if (strcmp(args[0], "exit") == 0) {
 
             if (argc != 1) {
@@ -96,17 +138,16 @@ int main(int argc_main, char *argv_main[]) {
             exit(0);
         }
 
-        // Built-in path command
+        // Built-in path
+
         if (strcmp(args[0], "path") == 0) {
 
-            // Free old paths
             for (int i = 0; i < path_count; i++) {
                 free(paths[i]);
             }
 
             path_count = 0;
 
-            // Store new paths
             for (int i = 1; i < argc; i++) {
                 paths[path_count] = strdup(args[i]);
                 path_count++;
@@ -115,7 +156,8 @@ int main(int argc_main, char *argv_main[]) {
             continue;
         }
 
-        // Built-in cd command
+        // Built-in cd
+
         if (strcmp(args[0], "cd") == 0) {
 
             if (argc != 2) {
@@ -130,7 +172,8 @@ int main(int argc_main, char *argv_main[]) {
             continue;
         }
 
-        // Search executable in paths
+        // Search executable
+
         char full_path[256];
         int command_found = 0;
 
@@ -150,42 +193,57 @@ int main(int argc_main, char *argv_main[]) {
             }
         }
 
-        // Command not found
         if (!command_found) {
             printf("An error has occurred\n");
             continue;
         }
 
-        // Create child process
+        // Fork
+
         pid_t pid = fork();
 
         if (pid == 0) {
 
-            // Child process
+            // Redirection
+
+            if (redirect_file != NULL) {
+
+                int fd = open(
+                    redirect_file,
+                    O_WRONLY | O_CREAT | O_TRUNC,
+                    0644
+                );
+
+                if (fd < 0) {
+                    printf("An error has occurred\n");
+                    exit(1);
+                }
+
+                dup2(fd, STDOUT_FILENO);
+                dup2(fd, STDERR_FILENO);
+
+                close(fd);
+            }
+
             execv(full_path, args);
 
-            // execv returns only if something went wrong
             printf("An error has occurred\n");
             exit(1);
 
         } else if (pid > 0) {
 
-            // Parent waits for child
             wait(NULL);
 
         } else {
 
-            // fork failed
             printf("An error has occurred\n");
         }
     }
 
-    // Free allocated paths
     for (int i = 0; i < path_count; i++) {
         free(paths[i]);
     }
 
-    // Close batch file
     if (!interactive) {
         fclose(input);
     }
